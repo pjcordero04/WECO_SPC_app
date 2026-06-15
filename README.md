@@ -33,20 +33,8 @@ A real-time Statistical Process Control (SPC) monitoring application that applie
 
 *SPC control chart with ±1σ, ±2σ, ±3σ bands, spec limits, and flagged violation points:*
 
-```
-┌────────────────────────────────────────────────────────────┐
-│  WECO SPC Chart: S2_1 | Port1 | Freq1 | ...               │
-│                                                            │
-│  ─── +3σ (red dashed)                                     │
-│  ··· +2σ (orange dotted)        ○ ← Violation (red)       │
-│  ··· +1σ (gold dotted)       ○                             │
-│  ─── Centerline (orange)  ○  ○  ○  ○  ○  ○                │
-│  ··· -1σ                                                   │
-│  ··· -2σ                                                   │
-│  ─── -3σ                                                   │
-│  ─·─ Spec Limits (green/purple)                            │
-└────────────────────────────────────────────────────────────┘
-```
+![alt text](3100520083-20260508-161629-01-2901-01871-06-15-2026--14-33-30--Rule1.png)
+
 
 ---
 
@@ -94,7 +82,7 @@ The executable will be located at `dist/weco_spc_gui_v2.exe`.
 
 ## Usage
 
-1. **Launch the application** — Run the `.exe` or the Python script
+1. **Launch the application** — Run `WECO_SPC.exe`
 2. **Configure rules** — Check/uncheck which WECO rules to enforce
 3. **Set window size** — Number of historical points for the rolling baseline (default: 30)
 4. **Select centerline mode** — Moving Average (rolling window) or Grand Mean (all data)
@@ -103,6 +91,44 @@ The executable will be located at `dist/weco_spc_gui_v2.exe`.
 7. **Click START** — Begins continuous monitoring
 8. **Acknowledge alarms** — When a violation triggers, a full-screen red flashing banner appears; click **ACKNOWLEDGE** to dismiss and resume monitoring
 9. **Click DONE TESTING** — Stops monitoring and resets the session
+
+---
+
+## Simulation Mode
+
+If you don't have a live fourport tester connected, you can simulate the app by manually setting up the test data folder structure.
+
+### Setup Steps
+
+1. **Create the TESTDATA folder** on your C drive:
+   ```
+   C:\TESTDATA\
+   ```
+
+2. **Create a subfolder** with the part number you want to simulate:
+   ```
+   C:\TESTDATA\<part_number>\
+   ```
+   For example, if your part number is `3100520083`:
+   ```
+   C:\TESTDATA\3100520083\
+   ```
+
+3. **Add test data** — Place timestamped subfolders containing `summary.txt` files inside the part number folder:
+   ```
+   C:\TESTDATA\3100520083\
+   ├── 20260615-143022\
+   │   └── summary.txt
+   ├── 20260615-143125\
+   │   └── summary.txt
+   └── ...
+   ```
+
+4. **Launch the app**, enter the part number (e.g. `3100520083`), and click **START**
+
+5. **To simulate real-time data**, drop new timestamped subfolders with `summary.txt` files while the app is running — it polls every second and will pick up new results automatically
+
+> **Note:** The included `move data 1by1.zip` contains sample test data that can be used for simulation. Extract its contents into your `C:\TESTDATA\<part_number>\` folder to try the app.
 
 ---
 
