@@ -1,10 +1,11 @@
 """
-Move subfolders one at a time to simulate real-time signal integrity testing.
+Move ETEST CSV files one at a time to simulate real-time cable testing.
 
-Moves subfolders from a source folder to a destination folder with a configurable
-delay between each move. Used for testing the SI WECO SPC app without a live tester.
+Moves individual CSV test report files from a source folder to a destination folder
+with a configurable delay between each move. Used for testing the ETEST WECO SPC app
+without a live cable tester connected.
 
-GUI version with source/destination folder browsing, Pause/Resume, Stop,
+GUI version with Pause/Resume button, source/destination folder browsing,
 and configurable delay.
 """
 
@@ -18,34 +19,44 @@ from tkinter import ttk, filedialog
 DELAY_SECONDS = 1
 
 
-def extract_timestamp(folder_name):
-    """Extract YYYYMMDD-HHMMSS from the folder name for sorting."""
-    m = re.search(r"(\d{8})-(\d{6})", folder_name)
-    if m:
-        return m.group(1) + m.group(2)
-    return ""
+def extract_cable_number(filename):
+    """
+    Extract the cable number from the ETEST filename for sorting.
+
+    Filename format: 2175420047_500V_LINK_TestReport_e-cct-146_2_1.csv
+    The last number before .csv is the cable number within the run.
+    The second-to-last number is the run number.
+    Returns (run_number, cable_number) tuple for sorting.
+    """
+    name = os.path.splitext(filename)[0]
+    parts = name.split('_')
+    try:
+        cable_num = int(parts[-1])
+        run_num = int(parts[-2])
+        return (run_num, cable_num)
+    except (ValueError, IndexError):
+        return (0, 0)
 
 
-def get_sorted_subfolders(source_dir):
-    """Get all subfolders sorted by timestamp (oldest first)."""
-    subfolders = [
-        entry.name for entry in os.scandir(source_dir)
-        if entry.is_dir()
+def get_sorted_csv_files(source_dir):
+    """Get all CSV files sorted by run number then cable number."""
+    csv_files = [
+        f for f in os.listdir(source_dir)
+        if f.lower().endswith('.csv') and os.path.isfile(os.path.join(source_dir, f))
     ]
-    subfolders.sort(key=lambda name: extract_timestamp(name))
-    return subfolders
+    csv_files.sort(key=lambda name: extract_cable_number(name))
+    return csv_files
 
 
-class MoveDataApp:
+class MoveEtestDataApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Move Data — Folder Mover")
+        self.root.title("Move ETEST Data — CSV File Mover")
         self.root.geometry("750x550")
         self.root.resizable(True, True)
 
         self.paused = False
         self.running = False
-        self.stopped = False
         self.pause_event = threading.Event()
         self.pause_event.set()  # Not paused initially
 
@@ -57,7 +68,7 @@ class MoveDataApp:
 
     def _build_ui(self):
         # --- Source folder ---
-        src_frame = ttk.LabelFrame(self.root, text="Source Folder (subfolders to move)", padding=10)
+        src_frame = ttk.LabelFrame(self.root, text="Source Folder (CSV files to move)", padding=10)
         src_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
 
         ttk.Entry(src_frame, textvariable=self.source_var, width=70).pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -116,7 +127,7 @@ class MoveDataApp:
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
     def browse_source(self):
-        path = filedialog.askdirectory(title="Select Source Folder (subfolders to move)")
+        path = filedialog.askdirectory(title="Select Source Folder (CSV files)")
         if path:
             self.source_var.set(path)
 
@@ -187,7 +198,9 @@ class MoveDataApp:
             self.log("⏸ Paused")
 
     def _move_worker(self, source_dir, dest_dir):
-        """Background worker that moves subfolders one at a time."""
+        """Background worker that moves CSV files one at a time."""
+        self.stopped = False
+
         if not os.path.isdir(source_dir):
             self.log(f"ERROR: Source directory does not exist:\n  {source_dir}")
             self._finish()
@@ -198,43 +211,45 @@ class MoveDataApp:
         self.log(f"Source: {source_dir}")
         self.log(f"Destination: {dest_dir}")
 
-        subfolders = get_sorted_subfolders(source_dir)
-        total = len(subfolders)
+        csv_files = get_sorted_csv_files(source_dir)
+        total = len(csv_files)
 
         if total == 0:
-            self.log("No subfolders to copy.")
+            self.log("No CSV files to move.")
             self._finish()
             return
 
-        self.log(f"Found {total} subfolders to copy.")
+        self.log(f"Found {total} CSV files to move.")
         self.root.after(0, self.progress_bar.configure, {"maximum": total})
 
         delay = self.delay_var.get()
 
-        for i, folder_name in enumerate(subfolders, start=1):
+        for i, filename in enumerate(csv_files, start=1):
             # Check if stopped
             if self.stopped:
-                self.log(f"⏹ Stopped at {i-1}/{total} folders.")
+                self.log(f"⏹ Stopped at {i-1}/{total} files.")
                 break
 
             # Wait if paused
             self.pause_event.wait()
 
             if self.stopped:
-                self.log(f"⏹ Stopped at {i-1}/{total} folders.")
+                self.log(f"⏹ Stopped at {i-1}/{total} files.")
                 break
 
-            src_path = os.path.join(source_dir, folder_name)
-            dst_path = os.path.join(dest_dir, folder_name)
+            src_path = os.path.join(source_dir, filename)
+            dst_path = os.path.join(dest_dir, filename)
 
-            if os.path.exists(dst_path):
-                self.log(f"[{i}/{total}] SKIP (already exists): {folder_name}")
+            if not os.path.exists(src_path):
+                self.log(f"[{i}/{total}] SKIP (missing): {filename}")
+            elif os.path.exists(dst_path):
+                self.log(f"[{i}/{total}] SKIP (already exists): {filename}")
             else:
                 try:
-                    shutil.copytree(src_path, dst_path)
-                    self.log(f"[{i}/{total}] COPIED: {folder_name}")
+                    shutil.copy2(src_path, dst_path)
+                    self.log(f"[{i}/{total}] COPIED: {filename}")
                 except Exception as e:
-                    self.log(f"[{i}/{total}] ERROR: {folder_name} — {e}")
+                    self.log(f"[{i}/{total}] ERROR: {filename} — {e}")
 
             # Update progress
             self.root.after(0, self._update_progress, i, total)
@@ -244,7 +259,7 @@ class MoveDataApp:
                 self._interruptible_sleep(delay)
 
         if not self.stopped:
-            self.log("✓ Done. All subfolders copied to destination.")
+            self.log("✓ Done. All CSV files moved to destination.")
         self._finish()
 
     def _interruptible_sleep(self, seconds):
@@ -279,5 +294,5 @@ class MoveDataApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = MoveDataApp(root)
+    app = MoveEtestDataApp(root)
     root.mainloop()

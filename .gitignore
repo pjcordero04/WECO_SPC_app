@@ -1,0 +1,12 @@
+__pycache__/
+build/
+dist/
+*.spec
+*.exe
+*.lnk
+*.pyc
+*.pptx
+*.mp4
+*.png
+!sample_data/**
+git
