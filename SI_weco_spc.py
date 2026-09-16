@@ -165,7 +165,17 @@ def parse_summary_csv(file_path):
 
             mean_f = float(mean_val)
             std_f = float(std_val)
-            result[col] = {"mean": mean_f, "std": std_f}
+
+            # Extract Median if available
+            median_val = df.loc["Median", col] if "Median" in df.index else None
+            median_f = None
+            if median_val is not None and str(median_val).strip().lower() != "none":
+                try:
+                    median_f = float(median_val)
+                except (ValueError, TypeError):
+                    pass
+
+            result[col] = {"mean": mean_f, "std": std_f, "median": median_f}
         except (ValueError, TypeError, KeyError):
             continue
 
@@ -1732,11 +1742,18 @@ class SPCApp:
             # Show the measured value of the latest violating point in the legend
             latest_viol_idx = violating_indices[-1]
             latest_viol_value = results.iloc[latest_viol_idx] if latest_viol_idx < len(results) else None
-            viol_label = f'SPC Failure = {latest_viol_value:.4f}' if latest_viol_value is not None else 'SPC Failure'
+            viol_label = f'SPC Outlier = {latest_viol_value:.4f}' if latest_viol_value is not None else 'SPC Outlier'
             ax.plot([i + 1 for i in violating_indices], [results.iloc[i] for i in violating_indices],
                     marker='o', color='red', linestyle='None', markersize=3, label=viol_label, zorder=5)
 
         ax.plot(centerline.index + 1, centerline, label=centerline_label, color='orange', linewidth=2)
+
+        # Median line (violet) — only in Fixed Limit mode when median is available
+        if mode == "fixed_limit" and param in self.fixed_limits:
+            median_val = self.fixed_limits[param].get("median")
+            if median_val is not None:
+                ax.axhline(median_val, color='violet', linewidth=1.2, linestyle='-',
+                           label=f'Median = {median_val:.4f}')
 
         valid = (~centerline.isna()) & (~std_line.isna())
 

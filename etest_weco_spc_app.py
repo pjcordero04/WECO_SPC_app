@@ -303,7 +303,17 @@ def parse_summary_csv(file_path):
             continue
         if pd.isna(mean_f) or pd.isna(std_f):
             continue
-        limits[param] = {"mean": mean_f, "std": std_f}
+
+        # Extract Median if available
+        median_val = df.loc["Median", param] if "Median" in df.index else None
+        median_f = None
+        if median_val is not None and str(median_val).strip().lower() != "none":
+            try:
+                median_f = float(median_val)
+            except (ValueError, TypeError):
+                pass
+
+        limits[param] = {"mean": mean_f, "std": std_f, "median": median_f}
     return limits
 
 
@@ -897,10 +907,10 @@ class EtestSPCApp:
             if idx < len(results):
                 ax.plot(idx, results.iloc[idx], marker='o', markersize=3, color='red', zorder=5)
                 failure_value = results.iloc[idx]
-        # Add SPC Failure legend entry (with measured value)
+        # Add SPC Outlier legend entry (with measured value)
         if failure_value is not None:
             ax.plot([], [], marker='o', markersize=3, linestyle='None', color='red',
-                    label=f'SPC Failure ({failure_value:.4f})')
+                    label=f'SPC Outlier ({failure_value:.4f})')
 
         # Centerline
         mode_label = self.centerline_mode.get().replace('_', ' ').title()
@@ -910,6 +920,14 @@ class EtestSPCApp:
 
         cl_label = f'Centerline ({mode_label}) X̄={cl_val:.4f}' if cl_val is not None else f'Centerline ({mode_label})'
         ax.plot(x, centerline, color='orange', linewidth=1.5, label=cl_label)
+
+        # Median line (violet) — only in Fixed Limit mode when median is available
+        mode = self.centerline_mode.get()
+        if mode == "fixed_limit" and param in self.fixed_limits:
+            median_val = self.fixed_limits[param].get("median")
+            if median_val is not None:
+                ax.axhline(median_val, color='violet', linewidth=1.2, linestyle='-',
+                           label=f'Median = {median_val:.4f}')
 
         # Sigma bands
         valid = (~centerline.isna()) & (~std_line.isna())
